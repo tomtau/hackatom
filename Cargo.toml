@@ -1,0 +1,30 @@
+[package]
+name = "cw20-clawback"
+version = "0.3.1"
+authors = ["Tomas Tauber <tomtau@users.noreply.github.com>"]
+edition = "2018"
+description = "(hackathon) Implementation of a clawback that accepts CosmWasm-20 tokens as well as native tokens"
+license = "Apache-2.0"
+repository = "https://github.com/tomtau/hackatom"
+
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+backtraces = ["cosmwasm-std/backtraces"]
+# use library feature to disable all init/handle/query exports
+library = []
+
+[dependencies]
+cw0 = { version = "0.3.1" }
+cw2 = { version = "0.3.1" }
+cw20 = { version = "0.3.1" }
+cosmwasm-std = { version = "0.11.1", features = ["iterator"] }
+cosmwasm-storage = { version = "0.11.1", features = ["iterator"] }
+schemars = "0.7"
+serde = { version = "1.0.103", default-features = false, features = ["derive"] }
+thiserror = { version = "1.0.20" }
+
+[dev-dependencies]
+cosmwasm-schema = { version = "0.11.1" }

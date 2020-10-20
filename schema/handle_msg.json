@@ -1,0 +1,297 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HandleMsg",
+  "anyOf": [
+    {
+      "type": "object",
+      "required": [
+        "create"
+      ],
+      "properties": {
+        "create": {
+          "$ref": "#/definitions/CreateMsg"
+        }
+      }
+    },
+    {
+      "description": "Adds all sent native tokens to the contract",
+      "type": "object",
+      "required": [
+        "top_up"
+      ],
+      "properties": {
+        "top_up": {
+          "type": "object",
+          "required": [
+            "id"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "Sends all tokens to the holder (after end time).",
+      "type": "object",
+      "required": [
+        "withdraw"
+      ],
+      "properties": {
+        "withdraw": {
+          "type": "object",
+          "required": [
+            "id"
+          ],
+          "properties": {
+            "id": {
+              "description": "id is a human-readable name for the clawback from create",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "Updates the end time with the extra clawback_period",
+      "type": "object",
+      "required": [
+        "refresh"
+      ],
+      "properties": {
+        "refresh": {
+          "type": "object",
+          "required": [
+            "id"
+          ],
+          "properties": {
+            "id": {
+              "description": "id is a human-readable name for the clawback from create",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "Destroys the tokens",
+      "type": "object",
+      "required": [
+        "burn"
+      ],
+      "properties": {
+        "burn": {
+          "type": "object",
+          "required": [
+            "id"
+          ],
+          "properties": {
+            "id": {
+              "description": "id is a human-readable name for the clawback from create",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "Transfer is only allowed between the clawbacks with the same \"backup\", \"clawback_period\" and \"cw20_whitelist\"",
+      "type": "object",
+      "required": [
+        "clawback_native_transfer"
+      ],
+      "properties": {
+        "clawback_native_transfer": {
+          "type": "object",
+          "required": [
+            "amount",
+            "from_id",
+            "to_id"
+          ],
+          "properties": {
+            "amount": {
+              "description": "the amount of the native token to transfer",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Coin"
+                }
+              ]
+            },
+            "from_id": {
+              "description": "id is a human-readable name for the clawback from create",
+              "type": "string"
+            },
+            "to_id": {
+              "description": "id is a human-readable name for the clawback from create",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "Transfer is only allowed between the clawbacks with the same \"backup\", \"clawback_period\" and \"cw20_whitelist\"",
+      "type": "object",
+      "required": [
+        "clawback_cw20_transfer"
+      ],
+      "properties": {
+        "clawback_cw20_transfer": {
+          "type": "object",
+          "required": [
+            "amount",
+            "from_id",
+            "to_id"
+          ],
+          "properties": {
+            "amount": {
+              "description": "the amount of the CW20 token to transfer",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Cw20CoinHuman"
+                }
+              ]
+            },
+            "from_id": {
+              "description": "id is a human-readable name for the clawback from create",
+              "type": "string"
+            },
+            "to_id": {
+              "description": "id is a human-readable name for the clawback from create",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "This accepts a properly-encoded ReceiveMsg from a cw20 contract",
+      "type": "object",
+      "required": [
+        "receive"
+      ],
+      "properties": {
+        "receive": {
+          "$ref": "#/definitions/Cw20ReceiveMsg"
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "Binary": {
+      "description": "Binary is a wrapper around Vec<u8> to add base64 de/serialization with serde. It also adds some helper methods to help encode inline.\n\nThis is only needed as serde-json-{core,wasm} has a horrible encoding for Vec<u8>",
+      "type": "string"
+    },
+    "Coin": {
+      "type": "object",
+      "required": [
+        "amount",
+        "denom"
+      ],
+      "properties": {
+        "amount": {
+          "$ref": "#/definitions/Uint128"
+        },
+        "denom": {
+          "type": "string"
+        }
+      }
+    },
+    "CreateMsg": {
+      "type": "object",
+      "required": [
+        "backup",
+        "clawback_period",
+        "holder",
+        "id"
+      ],
+      "properties": {
+        "backup": {
+          "description": "the key that before \"end_time\" may transfer to Clawback (with the same \"backup\" and \"clawback_period\") or burn the tokens",
+          "allOf": [
+            {
+              "$ref": "#/definitions/HumanAddr"
+            }
+          ]
+        },
+        "clawback_period": {
+          "description": "the duration of the clawback (end_time = block time + clawback_period)",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "cw20_whitelist": {
+          "description": "Besides any possible tokens sent with the CreateMsg, this is a list of all cw20 token addresses that are accepted by the clawback during a top-up. This is required to avoid a DoS attack by topping-up with an invalid cw20 contract. See https://github.com/CosmWasm/cosmwasm-plus/issues/19",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/HumanAddr"
+          }
+        },
+        "holder": {
+          "description": "the receiver of tokens -- before \"end_time\", they may transfer only to \"Clawback\" with the same \"backup\" and \"clawback_period\"; after \"end_time\", they may transfer anywhere",
+          "allOf": [
+            {
+              "$ref": "#/definitions/HumanAddr"
+            }
+          ]
+        },
+        "id": {
+          "description": "id is a human-readable name for the clawback to use later 3-20 bytes of utf-8 text",
+          "type": "string"
+        }
+      }
+    },
+    "Cw20CoinHuman": {
+      "type": "object",
+      "required": [
+        "address",
+        "amount"
+      ],
+      "properties": {
+        "address": {
+          "$ref": "#/definitions/HumanAddr"
+        },
+        "amount": {
+          "$ref": "#/definitions/Uint128"
+        }
+      }
+    },
+    "Cw20ReceiveMsg": {
+      "description": "Cw20ReceiveMsg should be de/serialized under `Receive()` variant in a HandleMsg",
+      "type": "object",
+      "required": [
+        "amount",
+        "sender"
+      ],
+      "properties": {
+        "amount": {
+          "$ref": "#/definitions/Uint128"
+        },
+        "msg": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Binary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sender": {
+          "$ref": "#/definitions/HumanAddr"
+        }
+      }
+    },
+    "HumanAddr": {
+      "type": "string"
+    },
+    "Uint128": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+CW20-Clawback: A CosmWasm clawback contract that handles native and cw20 tokens
+Copyright (C) 2020 Tomas Tauber
+
+This project contains portions of code derived from the following libraries:
+
+* CW20-Escrow
+ * Copyright: Copyright (c) 2020 Confio OÜ
+ * License: Apache License 2.0
+ * Repository: https://github.com/CosmWasm/cosmwasm-plus

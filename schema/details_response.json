@@ -1,0 +1,108 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DetailsResponse",
+  "type": "object",
+  "required": [
+    "backup",
+    "clawback_period",
+    "cw20_balance",
+    "cw20_whitelist",
+    "end_time",
+    "holder",
+    "id",
+    "native_balance"
+  ],
+  "properties": {
+    "backup": {
+      "description": "the key that before \"end_time\" may transfer to Clawback (with the same \"backup\" and \"clawback_period\") or burn the tokens",
+      "allOf": [
+        {
+          "$ref": "#/definitions/HumanAddr"
+        }
+      ]
+    },
+    "clawback_period": {
+      "description": "the duration of the clawback (end_time = block time + clawback_period)",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "cw20_balance": {
+      "description": "Balance in cw20 tokens",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Cw20CoinHuman"
+      }
+    },
+    "cw20_whitelist": {
+      "description": "Whitelisted cw20 tokens",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/HumanAddr"
+      }
+    },
+    "end_time": {
+      "description": "end time (in seconds since epoch 00:00:00 UTC on 1 January 1970); when block time exceeds this value, the holder can transfer outside Clawback.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "holder": {
+      "description": "the receiver of tokens -- before \"end_time\", they may transfer only to \"Clawback\" with the same \"backup\" and \"clawback_period\"; after \"end_time\", they may transfer anywhere",
+      "allOf": [
+        {
+          "$ref": "#/definitions/HumanAddr"
+        }
+      ]
+    },
+    "id": {
+      "description": "id of this clawback",
+      "type": "string"
+    },
+    "native_balance": {
+      "description": "Balance in native tokens",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Coin"
+      }
+    }
+  },
+  "definitions": {
+    "Coin": {
+      "type": "object",
+      "required": [
+        "amount",
+        "denom"
+      ],
+      "properties": {
+        "amount": {
+          "$ref": "#/definitions/Uint128"
+        },
+        "denom": {
+          "type": "string"
+        }
+      }
+    },
+    "Cw20CoinHuman": {
+      "type": "object",
+      "required": [
+        "address",
+        "amount"
+      ],
+      "properties": {
+        "address": {
+          "$ref": "#/definitions/HumanAddr"
+        },
+        "amount": {
+          "$ref": "#/definitions/Uint128"
+        }
+      }
+    },
+    "HumanAddr": {
+      "type": "string"
+    },
+    "Uint128": {
+      "type": "string"
+    }
+  }
+}
