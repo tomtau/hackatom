@@ -340,10 +340,10 @@ fn query_list<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResu
 
 #[cfg(test)]
 mod tests {
+    use crate::msg::HandleMsg::TopUp;
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info, MOCK_CONTRACT_ADDR};
     use cosmwasm_std::{coin, coins, CanonicalAddr, CosmosMsg, StdError, Uint128};
-
-    use crate::msg::HandleMsg::TopUp;
+    use cw0::NativeBalance;
 
     use super::*;
 
@@ -401,7 +401,7 @@ mod tests {
         new_env.block.time = mock_time + mock_clawback_period;
         let res = handle(&mut deps, new_env.clone(), info, HandleMsg::Withdraw { id }).unwrap();
         assert_eq!(1, res.messages.len());
-        assert_eq!(attr("action", "approve"), res.attributes[0]);
+        assert_eq!(attr("action", "withdraw"), res.attributes[0]);
         assert_eq!(
             res.messages[0],
             CosmosMsg::Bank(BankMsg::Send {
@@ -453,7 +453,7 @@ mod tests {
         let msg = HandleMsg::Receive(receive.clone());
         let res = handle(&mut deps, init_env, info, msg).unwrap();
         assert_eq!(0, res.messages.len());
-        assert_eq!(attr("action", "create"), res.attributes[0]);
+        assert_eq!(attr("action", "withdraw"), res.attributes[0]);
         // ensure the whitelist is what we expect
         let details = query_details(&deps, "foobar".to_string()).unwrap();
 
@@ -484,7 +484,7 @@ mod tests {
         new_env.block.time = mock_time + mock_clawback_period;
         let res = handle(&mut deps, new_env.clone(), info, HandleMsg::Withdraw { id }).unwrap();
         assert_eq!(1, res.messages.len());
-        assert_eq!(attr("action", "approve"), res.attributes[0]);
+        assert_eq!(attr("action", "withdraw"), res.attributes[0]);
         let send_msg = Cw20HandleMsg::Transfer {
             recipient: create.holder.clone(),
             amount: receive.amount,
@@ -627,7 +627,212 @@ mod tests {
 
     #[test]
     fn transfer_native() {
-        todo!();
+        let mut deps = mock_dependencies(&[]);
+
+        // init an empty contract
+        let init_msg = InitMsg {};
+        let mock_clawback_period = 2;
+        let mock_time = 1571920875;
+        let mut init_env = mock_env();
+        init_env.block.time = mock_time;
+
+        let info = mock_info(&HumanAddr::from("anyone"), &[]);
+        let res = init(&mut deps, init_env.clone(), info, init_msg).unwrap();
+        assert_eq!(0, res.messages.len());
+        let balance = coins(100, "tokens");
+        // create two clawbacks
+        for idc in ["foo", "bar", "wrong-per", "wrong-back"].iter() {
+            let create = CreateMsg {
+                id: idc.to_string(),
+                backup: if *idc == "wrong-back" {
+                    HumanAddr::from("backup2")
+                } else {
+                    HumanAddr::from("backup")
+                },
+                holder: HumanAddr::from(*idc),
+                clawback_period: if *idc == "wrong-per" {
+                    mock_clawback_period - 1
+                } else {
+                    mock_clawback_period
+                },
+                cw20_whitelist: None,
+            };
+            let sender = HumanAddr::from("source");
+
+            let info = mock_info(&sender, &balance);
+            let msg = HandleMsg::Create(create.clone());
+
+            let res = handle(&mut deps, init_env.clone(), info, msg).unwrap();
+            assert_eq!(0, res.messages.len());
+            assert_eq!(attr("action", "create"), res.attributes[0]);
+
+            // ensure the details is what we expect
+            let details = query_details(&deps, idc.to_string()).unwrap();
+            assert_eq!(
+                details,
+                DetailsResponse {
+                    id: idc.to_string(),
+                    backup: if *idc == "wrong-back" {
+                        HumanAddr::from("backup2")
+                    } else {
+                        HumanAddr::from("backup")
+                    },
+                    holder: HumanAddr::from(*idc),
+                    clawback_period: if *idc == "wrong-per" {
+                        mock_clawback_period - 1
+                    } else {
+                        mock_clawback_period
+                    },
+                    end_time: if *idc == "wrong-per" {
+                        mock_time + mock_clawback_period - 1
+                    } else {
+                        mock_time + mock_clawback_period
+                    },
+                    native_balance: balance.clone(),
+                    cw20_balance: vec![],
+                    cw20_whitelist: vec![],
+                }
+            );
+        }
+
+        // transfer it
+        let from_id = "foo".to_string();
+        let to_id = "bar".to_string();
+        let info = mock_info(HumanAddr::from(from_id.clone()), &[]);
+        let mut new_env = mock_env();
+        new_env.block.time = mock_time + 1;
+        let res = handle(
+            &mut deps,
+            new_env.clone(),
+            info,
+            HandleMsg::ClawbackTransfer {
+                from_id,
+                to_id,
+                amount: Balance::Native(NativeBalance(coins(1, "tokens"))),
+            },
+        )
+        .unwrap();
+        assert_eq!(0, res.messages.len());
+        assert_eq!(attr("action", "transfer"), res.attributes[0]);
+
+        // ensure the details is what we expect
+        let details = query_details(&deps, "foo".to_string()).unwrap();
+        assert_eq!(
+            details,
+            DetailsResponse {
+                id: "foo".to_string(),
+                backup: HumanAddr::from("backup"),
+                holder: HumanAddr::from("foo"),
+                clawback_period: mock_clawback_period,
+                end_time: mock_time + mock_clawback_period,
+                native_balance: coins(99, "tokens"),
+                cw20_balance: vec![],
+                cw20_whitelist: vec![],
+            }
+        );
+
+        let details = query_details(&deps, "bar".to_string()).unwrap();
+        assert_eq!(
+            details,
+            DetailsResponse {
+                id: "bar".to_string(),
+                backup: HumanAddr::from("backup"),
+                holder: HumanAddr::from("bar"),
+                clawback_period: mock_clawback_period,
+                end_time: mock_time + 1 + mock_clawback_period,
+                native_balance: coins(101, "tokens"),
+                cw20_balance: vec![],
+                cw20_whitelist: vec![],
+            }
+        );
+
+        // claw back
+        let from_id = "bar".to_string();
+        let to_id = "foo".to_string();
+        let info = mock_info(HumanAddr::from("backup"), &[]);
+        let res = handle(
+            &mut deps,
+            new_env.clone(),
+            info,
+            HandleMsg::ClawbackTransfer {
+                from_id,
+                to_id,
+                amount: Balance::Native(NativeBalance(coins(1, "tokens"))),
+            },
+        )
+        .unwrap();
+        assert_eq!(0, res.messages.len());
+        assert_eq!(attr("action", "transfer"), res.attributes[0]);
+
+        // ensure the details is what we expect
+        let details = query_details(&deps, "foo".to_string()).unwrap();
+        assert_eq!(
+            details,
+            DetailsResponse {
+                id: "foo".to_string(),
+                backup: HumanAddr::from("backup"),
+                holder: HumanAddr::from("foo"),
+                clawback_period: mock_clawback_period,
+                end_time: mock_time + 1 + mock_clawback_period,
+                native_balance: balance.clone(),
+                cw20_balance: vec![],
+                cw20_whitelist: vec![],
+            }
+        );
+
+        let details = query_details(&deps, "bar".to_string()).unwrap();
+        assert_eq!(
+            details,
+            DetailsResponse {
+                id: "bar".to_string(),
+                backup: HumanAddr::from("backup"),
+                holder: HumanAddr::from("bar"),
+                clawback_period: mock_clawback_period,
+                end_time: mock_time + 1 + mock_clawback_period,
+                native_balance: balance.clone(),
+                cw20_balance: vec![],
+                cw20_whitelist: vec![],
+            }
+        );
+
+        // failures
+        let from_id = "foo".to_string();
+        let to_id = "wrong-per".to_string();
+        let info = mock_info(HumanAddr::from(from_id.clone()), &[]);
+        let res = handle(
+            &mut deps,
+            new_env.clone(),
+            info,
+            HandleMsg::ClawbackTransfer {
+                from_id,
+                to_id,
+                amount: Balance::Native(NativeBalance(coins(1, "tokens"))),
+            },
+        );
+
+        match res.unwrap_err() {
+            ContractError::ContractMismatch {} => {}
+            e => panic!("Expected ContractMismatch, got {}", e),
+        }
+
+        let from_id = "foo".to_string();
+        let to_id = "wrong-back".to_string();
+        let info = mock_info(HumanAddr::from(from_id.clone()), &[]);
+        let res = handle(
+            &mut deps,
+            new_env.clone(),
+            info,
+            HandleMsg::ClawbackTransfer {
+                from_id,
+                to_id,
+                amount: Balance::Native(NativeBalance(coins(1, "tokens"))),
+            },
+        );
+
+        match res.unwrap_err() {
+            ContractError::ContractMismatch {} => {}
+            e => panic!("Expected ContractMismatch, got {}", e),
+        }
     }
 
     #[test]
@@ -742,7 +947,7 @@ mod tests {
         let id = create.id.clone();
         let info = mock_info(&create.holder, &[]);
         let res = handle(&mut deps, new_env.clone(), info, HandleMsg::Withdraw { id }).unwrap();
-        assert_eq!(attr("action", "approve"), res.attributes[0]);
+        assert_eq!(attr("action", "withdraw"), res.attributes[0]);
         assert_eq!(3, res.messages.len());
 
         // first message releases all native coins

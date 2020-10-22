@@ -21,6 +21,9 @@ pub enum ContractError {
     #[error("Send some coins to create a clawback")]
     EmptyBalance {},
 
+    #[error("Incoming clawback's backup and period should match the outgoing one")]
+    ContractMismatch {},
+
     #[error("Clawback id already in use")]
     AlreadyInUse {},
 }
