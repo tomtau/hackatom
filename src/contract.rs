@@ -502,6 +502,80 @@ mod tests {
     }
 
     #[test]
+    fn remove_tokens_proper() {
+        let mut tokens = GenericBalance::default();
+        tokens.add_tokens(Balance::from(vec![coin(123, "atom"), coin(789, "eth")]));
+        assert_eq!(
+            tokens.remove_tokens(Balance::from(vec![coin(456, "atom"), coin(12, "btc")])),
+            Err(())
+        );
+        assert_eq!(tokens.native, vec![coin(123, "atom"), coin(789, "eth")]);
+        assert_eq!(
+            tokens.remove_tokens(Balance::from(vec![coin(1, "atom"), coin(1, "btc")])),
+            Err(())
+        );
+        assert_eq!(tokens.native, vec![coin(123, "atom"), coin(789, "eth")]);
+        assert_eq!(
+            tokens.remove_tokens(Balance::from(vec![coin(1, "atom"), coin(1, "eth")])),
+            Ok(())
+        );
+        assert_eq!(tokens.native, vec![coin(122, "atom"), coin(788, "eth")]);
+    }
+
+    #[test]
+    fn remove_cw_tokens_proper() {
+        let mut tokens = GenericBalance::default();
+        let bar_token = CanonicalAddr(b"bar_token".to_vec().into());
+        let foo_token = CanonicalAddr(b"foo_token".to_vec().into());
+        tokens.add_tokens(Balance::Cw20(Cw20Coin {
+            address: foo_token.clone(),
+            amount: Uint128(12345),
+        }));
+        assert_eq!(
+            tokens.remove_tokens(Balance::Cw20(Cw20Coin {
+                address: bar_token.clone(),
+                amount: Uint128(777),
+            })),
+            Err(())
+        );
+        assert_eq!(
+            tokens.cw20,
+            vec![Cw20Coin {
+                address: foo_token.clone(),
+                amount: Uint128(12345),
+            }]
+        );
+        assert_eq!(
+            tokens.remove_tokens(Balance::Cw20(Cw20Coin {
+                address: foo_token.clone(),
+                amount: Uint128(23400),
+            })),
+            Err(())
+        );
+        assert_eq!(
+            tokens.cw20,
+            vec![Cw20Coin {
+                address: foo_token.clone(),
+                amount: Uint128(12345),
+            }]
+        );
+        assert_eq!(
+            tokens.remove_tokens(Balance::Cw20(Cw20Coin {
+                address: foo_token.clone(),
+                amount: Uint128(1),
+            })),
+            Ok(())
+        );
+        assert_eq!(
+            tokens.cw20,
+            vec![Cw20Coin {
+                address: foo_token.clone(),
+                amount: Uint128(12344),
+            }]
+        );
+    }
+
+    #[test]
     fn add_tokens_proper() {
         let mut tokens = GenericBalance::default();
         tokens.add_tokens(Balance::from(vec![coin(123, "atom"), coin(789, "eth")]));

@@ -15,6 +15,10 @@ pub struct GenericBalance {
 }
 
 impl GenericBalance {
+    pub fn remove_tokens(&mut self, remove: Balance) -> Result<(), ()> {
+        Err(())
+    }
+
     pub fn add_tokens(&mut self, add: Balance) {
         match add {
             Balance::Native(balance) => {
