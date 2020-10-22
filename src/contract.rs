@@ -647,136 +647,140 @@ mod tests {
 
     #[test]
     fn top_up_mixed_tokens() {
-        todo!();
-        // let mut deps = mock_dependencies(&[]);
+        let mut deps = mock_dependencies(&[]);
+        let mock_time = 1571920875;
+        let mut init_env = mock_env();
+        init_env.block.time = mock_time;
+        // init an empty contract
+        let init_msg = InitMsg {};
+        let info = mock_info(&HumanAddr::from("anyone"), &[]);
+        let res = init(&mut deps, init_env.clone(), info, init_msg).unwrap();
+        assert_eq!(0, res.messages.len());
 
-        // // init an empty contract
-        // let init_msg = InitMsg {};
-        // let info = mock_info(&HumanAddr::from("anyone"), &[]);
-        // let res = init(&mut deps, mock_env(), info, init_msg).unwrap();
-        // assert_eq!(0, res.messages.len());
+        // only accept these tokens
+        let whitelist = vec![HumanAddr::from("bar_token"), HumanAddr::from("foo_token")];
 
-        // // only accept these tokens
-        // let whitelist = vec![HumanAddr::from("bar_token"), HumanAddr::from("foo_token")];
+        // create a clawback with 2 native tokens
+        let mock_clawback_period = 1;
 
-        // // create an escrow with 2 native tokens
-        // let create = CreateMsg {
-        //     id: "foobar".to_string(),
-        //     arbiter: HumanAddr::from("arbitrate"),
-        //     recipient: HumanAddr::from("recd"),
-        //     end_time: None,
-        //     end_height: None,
-        //     cw20_whitelist: Some(whitelist),
-        // };
-        // let sender = HumanAddr::from("source");
-        // let balance = vec![coin(100, "fee"), coin(200, "stake")];
-        // let info = mock_info(&sender, &balance);
-        // let msg = HandleMsg::Create(create.clone());
-        // let res = handle(&mut deps, mock_env(), info, msg).unwrap();
-        // assert_eq!(0, res.messages.len());
-        // assert_eq!(attr("action", "create"), res.attributes[0]);
+        let create = CreateMsg {
+            id: "foobar".to_string(),
+            backup: HumanAddr::from("backup"),
+            holder: HumanAddr::from("holder"),
+            clawback_period: mock_clawback_period,
+            cw20_whitelist: Some(whitelist),
+        };
+        let sender = HumanAddr::from("source");
+        let balance = vec![coin(100, "fee"), coin(200, "stake")];
+        let info = mock_info(&sender, &balance);
+        let msg = HandleMsg::Create(create.clone());
+        let res = handle(&mut deps, init_env.clone(), info, msg).unwrap();
+        assert_eq!(0, res.messages.len());
+        assert_eq!(attr("action", "create"), res.attributes[0]);
 
-        // // top it up with 2 more native tokens
-        // let extra_native = vec![coin(250, "random"), coin(300, "stake")];
-        // let info = mock_info(&sender, &extra_native);
-        // let top_up = HandleMsg::TopUp {
-        //     id: create.id.clone(),
-        // };
-        // let res = handle(&mut deps, mock_env(), info, top_up).unwrap();
-        // assert_eq!(0, res.messages.len());
-        // assert_eq!(attr("action", "top_up"), res.attributes[0]);
+        // top it up with 2 more native tokens
+        let extra_native = vec![coin(250, "random"), coin(300, "stake")];
+        let info = mock_info(&sender, &extra_native);
+        let top_up = HandleMsg::TopUp {
+            id: create.id.clone(),
+        };
+        let res = handle(&mut deps, init_env.clone(), info, top_up).unwrap();
+        assert_eq!(0, res.messages.len());
+        assert_eq!(attr("action", "top_up"), res.attributes[0]);
 
-        // // top up with one foreign token
-        // let bar_token = HumanAddr::from("bar_token");
-        // let base = TopUp {
-        //     id: create.id.clone(),
-        // };
-        // let top_up = HandleMsg::Receive(Cw20ReceiveMsg {
-        //     sender: HumanAddr::from("random"),
-        //     amount: Uint128(7890),
-        //     msg: Some(to_binary(&base).unwrap()),
-        // });
-        // let info = mock_info(&bar_token, &[]);
-        // let res = handle(&mut deps, mock_env(), info, top_up).unwrap();
-        // assert_eq!(0, res.messages.len());
-        // assert_eq!(attr("action", "top_up"), res.attributes[0]);
+        // top up with one foreign token
+        let bar_token = HumanAddr::from("bar_token");
+        let base = TopUp {
+            id: create.id.clone(),
+        };
+        let top_up = HandleMsg::Receive(Cw20ReceiveMsg {
+            sender: HumanAddr::from("random"),
+            amount: Uint128(7890),
+            msg: Some(to_binary(&base).unwrap()),
+        });
+        let info = mock_info(&bar_token, &[]);
+        let res = handle(&mut deps, init_env.clone(), info, top_up).unwrap();
+        assert_eq!(0, res.messages.len());
+        assert_eq!(attr("action", "top_up"), res.attributes[0]);
 
-        // // top with a foreign token not on the whitelist
-        // // top up with one foreign token
-        // let baz_token = HumanAddr::from("baz_token");
-        // let base = TopUp {
-        //     id: create.id.clone(),
-        // };
-        // let top_up = HandleMsg::Receive(Cw20ReceiveMsg {
-        //     sender: HumanAddr::from("random"),
-        //     amount: Uint128(7890),
-        //     msg: Some(to_binary(&base).unwrap()),
-        // });
-        // let info = mock_info(&baz_token, &[]);
-        // let res = handle(&mut deps, mock_env(), info, top_up);
-        // match res.unwrap_err() {
-        //     ContractError::NotInWhitelist {} => {}
-        //     e => panic!("Unexpected error: {}", e),
-        // }
+        // top with a foreign token not on the whitelist
+        // top up with one foreign token
+        let baz_token = HumanAddr::from("baz_token");
+        let base = TopUp {
+            id: create.id.clone(),
+        };
+        let top_up = HandleMsg::Receive(Cw20ReceiveMsg {
+            sender: HumanAddr::from("random"),
+            amount: Uint128(7890),
+            msg: Some(to_binary(&base).unwrap()),
+        });
+        let info = mock_info(&baz_token, &[]);
+        let res = handle(&mut deps, init_env.clone(), info, top_up);
+        match res.unwrap_err() {
+            ContractError::NotInWhitelist {} => {}
+            e => panic!("Unexpected error: {}", e),
+        }
 
-        // // top up with second foreign token
-        // let foo_token = HumanAddr::from("foo_token");
-        // let base = TopUp {
-        //     id: create.id.clone(),
-        // };
-        // let top_up = HandleMsg::Receive(Cw20ReceiveMsg {
-        //     sender: HumanAddr::from("random"),
-        //     amount: Uint128(888),
-        //     msg: Some(to_binary(&base).unwrap()),
-        // });
-        // let info = mock_info(&foo_token, &[]);
-        // let res = handle(&mut deps, mock_env(), info, top_up).unwrap();
-        // assert_eq!(0, res.messages.len());
-        // assert_eq!(attr("action", "top_up"), res.attributes[0]);
+        // top up with second foreign token
+        let foo_token = HumanAddr::from("foo_token");
+        let base = TopUp {
+            id: create.id.clone(),
+        };
+        let top_up = HandleMsg::Receive(Cw20ReceiveMsg {
+            sender: HumanAddr::from("random"),
+            amount: Uint128(888),
+            msg: Some(to_binary(&base).unwrap()),
+        });
+        let info = mock_info(&foo_token, &[]);
+        let res = handle(&mut deps, init_env.clone(), info, top_up).unwrap();
+        assert_eq!(0, res.messages.len());
+        assert_eq!(attr("action", "top_up"), res.attributes[0]);
 
-        // // approve it
-        // let id = create.id.clone();
-        // let info = mock_info(&create.arbiter, &[]);
-        // let res = handle(&mut deps, mock_env(), info, HandleMsg::Approve { id }).unwrap();
-        // assert_eq!(attr("action", "approve"), res.attributes[0]);
-        // assert_eq!(3, res.messages.len());
+        // withdraw it
+        let mut new_env = mock_env();
+        new_env.block.time = mock_time + mock_clawback_period;
+        let id = create.id.clone();
+        let info = mock_info(&create.holder, &[]);
+        let res = handle(&mut deps, new_env.clone(), info, HandleMsg::Withdraw { id }).unwrap();
+        assert_eq!(attr("action", "approve"), res.attributes[0]);
+        assert_eq!(3, res.messages.len());
 
-        // // first message releases all native coins
-        // assert_eq!(
-        //     res.messages[0],
-        //     CosmosMsg::Bank(BankMsg::Send {
-        //         from_address: HumanAddr::from(MOCK_CONTRACT_ADDR),
-        //         to_address: create.recipient.clone(),
-        //         amount: vec![coin(100, "fee"), coin(500, "stake"), coin(250, "random")],
-        //     })
-        // );
+        // first message releases all native coins
+        assert_eq!(
+            res.messages[0],
+            CosmosMsg::Bank(BankMsg::Send {
+                from_address: HumanAddr::from(MOCK_CONTRACT_ADDR),
+                to_address: create.holder.clone(),
+                amount: vec![coin(100, "fee"), coin(500, "stake"), coin(250, "random")],
+            })
+        );
 
-        // // second one release bar cw20 token
-        // let send_msg = Cw20HandleMsg::Transfer {
-        //     recipient: create.recipient.clone(),
-        //     amount: Uint128(7890),
-        // };
-        // assert_eq!(
-        //     res.messages[1],
-        //     CosmosMsg::Wasm(WasmMsg::Execute {
-        //         contract_addr: bar_token,
-        //         msg: to_binary(&send_msg).unwrap(),
-        //         send: vec![],
-        //     })
-        // );
+        // second one release bar cw20 token
+        let send_msg = Cw20HandleMsg::Transfer {
+            recipient: create.holder.clone(),
+            amount: Uint128(7890),
+        };
+        assert_eq!(
+            res.messages[1],
+            CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: bar_token,
+                msg: to_binary(&send_msg).unwrap(),
+                send: vec![],
+            })
+        );
 
-        // // third one release foo cw20 token
-        // let send_msg = Cw20HandleMsg::Transfer {
-        //     recipient: create.recipient.clone(),
-        //     amount: Uint128(888),
-        // };
-        // assert_eq!(
-        //     res.messages[2],
-        //     CosmosMsg::Wasm(WasmMsg::Execute {
-        //         contract_addr: foo_token,
-        //         msg: to_binary(&send_msg).unwrap(),
-        //         send: vec![],
-        //     })
-        // );
+        // third one release foo cw20 token
+        let send_msg = Cw20HandleMsg::Transfer {
+            recipient: create.holder.clone(),
+            amount: Uint128(888),
+        };
+        assert_eq!(
+            res.messages[2],
+            CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: foo_token,
+                msg: to_binary(&send_msg).unwrap(),
+                send: vec![],
+            })
+        );
     }
 }
