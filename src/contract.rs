@@ -353,8 +353,13 @@ mod tests {
 
         // init an empty contract
         let init_msg = InitMsg {};
+        let mock_clawback_period = 1;
+        let mock_time = 1571920875;
+        let mut init_env = mock_env();
+        init_env.block.time = mock_time;
+
         let info = mock_info(&HumanAddr::from("anyone"), &[]);
-        let res = init(&mut deps, mock_env(), info, init_msg).unwrap();
+        let res = init(&mut deps, init_env.clone(), info, init_msg).unwrap();
         assert_eq!(0, res.messages.len());
 
         // create a clawback
@@ -362,21 +367,19 @@ mod tests {
             id: "foobar".to_string(),
             backup: HumanAddr::from("backup"),
             holder: HumanAddr::from("holder"),
-            clawback_period: 1,
+            clawback_period: mock_clawback_period,
             cw20_whitelist: None,
         };
         let sender = HumanAddr::from("source");
         let balance = coins(100, "tokens");
         let info = mock_info(&sender, &balance);
         let msg = HandleMsg::Create(create.clone());
-        let res = handle(&mut deps, mock_env(), info, msg).unwrap();
+        let res = handle(&mut deps, init_env, info, msg).unwrap();
         assert_eq!(0, res.messages.len());
         assert_eq!(attr("action", "create"), res.attributes[0]);
 
         // ensure the details is what we expect
         let details = query_details(&deps, "foobar".to_string()).unwrap();
-        let mock_time = 1571920875;
-        let mock_clawback_period = 1;
         assert_eq!(
             details,
             DetailsResponse {
@@ -384,7 +387,7 @@ mod tests {
                 backup: HumanAddr::from("backup"),
                 holder: HumanAddr::from("holder"),
                 clawback_period: mock_clawback_period,
-                end_time: mock_time,
+                end_time: mock_time + mock_clawback_period,
                 native_balance: balance.clone(),
                 cw20_balance: vec![],
                 cw20_whitelist: vec![],
@@ -420,86 +423,89 @@ mod tests {
 
     #[test]
     fn happy_path_cw20() {
-        todo!();
-        // let mut deps = mock_dependencies(&[]);
+        let mut deps = mock_dependencies(&[]);
+        let mock_time = 1571920875;
+        let mut init_env = mock_env();
+        init_env.block.time = mock_time;
+        // init an empty contract
+        let init_msg = InitMsg {};
+        let info = mock_info(&HumanAddr::from("anyone"), &[]);
 
-        // // init an empty contract
-        // let init_msg = InitMsg {};
-        // let info = mock_info(&HumanAddr::from("anyone"), &[]);
-        // let res = init(&mut deps, mock_env(), info, init_msg).unwrap();
-        // assert_eq!(0, res.messages.len());
+        let res = init(&mut deps, init_env.clone(), info, init_msg).unwrap();
+        assert_eq!(0, res.messages.len());
 
-        // // create an escrow
-        // let create = CreateMsg {
-        //     id: "foobar".to_string(),
-        //     arbiter: HumanAddr::from("arbitrate"),
-        //     recipient: HumanAddr::from("recd"),
-        //     end_time: None,
-        //     end_height: None,
-        //     cw20_whitelist: Some(vec![HumanAddr::from("other-token")]),
-        // };
-        // let receive = Cw20ReceiveMsg {
-        //     sender: HumanAddr::from("source"),
-        //     amount: Uint128(100),
-        //     msg: Some(to_binary(&HandleMsg::Create(create.clone())).unwrap()),
-        // };
-        // let token_contract = HumanAddr::from("my-cw20-token");
-        // let info = mock_info(&token_contract, &[]);
-        // let msg = HandleMsg::Receive(receive.clone());
-        // let res = handle(&mut deps, mock_env(), info, msg).unwrap();
-        // assert_eq!(0, res.messages.len());
-        // assert_eq!(attr("action", "create"), res.attributes[0]);
+        // create a clawback
+        let mock_clawback_period = 1;
+        let create = CreateMsg {
+            id: "foobar".to_string(),
+            holder: HumanAddr::from("holder"),
+            backup: HumanAddr::from("backup"),
+            clawback_period: mock_clawback_period,
+            cw20_whitelist: Some(vec![HumanAddr::from("other-token")]),
+        };
+        let receive = Cw20ReceiveMsg {
+            sender: HumanAddr::from("source"),
+            amount: Uint128(100),
+            msg: Some(to_binary(&HandleMsg::Create(create.clone())).unwrap()),
+        };
+        let token_contract = HumanAddr::from("my-cw20-token");
+        let info = mock_info(&token_contract, &[]);
+        let msg = HandleMsg::Receive(receive.clone());
+        let res = handle(&mut deps, init_env, info, msg).unwrap();
+        assert_eq!(0, res.messages.len());
+        assert_eq!(attr("action", "create"), res.attributes[0]);
+        // ensure the whitelist is what we expect
+        let details = query_details(&deps, "foobar".to_string()).unwrap();
 
-        // // ensure the whitelist is what we expect
-        // let details = query_details(&deps, "foobar".to_string()).unwrap();
-        // assert_eq!(
-        //     details,
-        //     DetailsResponse {
-        //         id: "foobar".to_string(),
-        //         arbiter: HumanAddr::from("arbitrate"),
-        //         recipient: HumanAddr::from("recd"),
-        //         source: HumanAddr::from("source"),
-        //         end_height: None,
-        //         end_time: None,
-        //         native_balance: vec![],
-        //         cw20_balance: vec![Cw20CoinHuman {
-        //             address: HumanAddr::from("my-cw20-token"),
-        //             amount: Uint128(100),
-        //         }],
-        //         cw20_whitelist: vec![
-        //             HumanAddr::from("other-token"),
-        //             HumanAddr::from("my-cw20-token")
-        //         ],
-        //     }
-        // );
+        assert_eq!(
+            details,
+            DetailsResponse {
+                id: "foobar".to_string(),
+                holder: HumanAddr::from("holder"),
+                backup: HumanAddr::from("backup"),
+                end_time: mock_time + mock_clawback_period,
+                clawback_period: mock_clawback_period,
+                native_balance: vec![],
+                cw20_balance: vec![Cw20CoinHuman {
+                    address: HumanAddr::from("my-cw20-token"),
+                    amount: Uint128(100),
+                }],
+                cw20_whitelist: vec![
+                    HumanAddr::from("other-token"),
+                    HumanAddr::from("my-cw20-token")
+                ],
+            }
+        );
 
-        // // approve it
-        // let id = create.id.clone();
-        // let info = mock_info(&create.arbiter, &[]);
-        // let res = handle(&mut deps, mock_env(), info, HandleMsg::Approve { id }).unwrap();
-        // assert_eq!(1, res.messages.len());
-        // assert_eq!(attr("action", "approve"), res.attributes[0]);
-        // let send_msg = Cw20HandleMsg::Transfer {
-        //     recipient: create.recipient,
-        //     amount: receive.amount,
-        // };
-        // assert_eq!(
-        //     res.messages[0],
-        //     CosmosMsg::Wasm(WasmMsg::Execute {
-        //         contract_addr: token_contract,
-        //         msg: to_binary(&send_msg).unwrap(),
-        //         send: vec![],
-        //     })
-        // );
+        // withdraw it
+        let id = create.id.clone();
+        let info = mock_info(&create.holder, &[]);
+        let mut new_env = mock_env();
+        new_env.block.time = mock_time + mock_clawback_period;
+        let res = handle(&mut deps, new_env.clone(), info, HandleMsg::Withdraw { id }).unwrap();
+        assert_eq!(1, res.messages.len());
+        assert_eq!(attr("action", "approve"), res.attributes[0]);
+        let send_msg = Cw20HandleMsg::Transfer {
+            recipient: create.holder.clone(),
+            amount: receive.amount,
+        };
+        assert_eq!(
+            res.messages[0],
+            CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: token_contract,
+                msg: to_binary(&send_msg).unwrap(),
+                send: vec![],
+            })
+        );
 
-        // // second attempt fails (not found)
-        // let id = create.id.clone();
-        // let info = mock_info(&create.arbiter, &[]);
-        // let res = handle(&mut deps, mock_env(), info, HandleMsg::Approve { id });
-        // match res.unwrap_err() {
-        //     ContractError::Std(StdError::NotFound { .. }) => {}
-        //     e => panic!("Expected NotFound, got {}", e),
-        // }
+        // second attempt fails (not found)
+        let id = create.id.clone();
+        let info = mock_info(&create.holder, &[]);
+        let res = handle(&mut deps, new_env, info, HandleMsg::Withdraw { id });
+        match res.unwrap_err() {
+            ContractError::Std(StdError::NotFound { .. }) => {}
+            e => panic!("Expected NotFound, got {}", e),
+        }
     }
 
     #[test]
