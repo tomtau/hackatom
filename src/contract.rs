@@ -641,6 +641,266 @@ mod tests {
     }
 
     #[test]
+    fn transfer_cw20() {
+        let mut deps = mock_dependencies(&[]);
+
+        // init an empty contract
+        let init_msg = InitMsg {};
+        let mock_clawback_period = 2;
+        let mock_time = 1571920875;
+        let mut init_env = mock_env();
+        init_env.block.time = mock_time;
+        let token_contract = HumanAddr::from("my-cw20-token");
+
+        let info = mock_info(&HumanAddr::from("anyone"), &[]);
+        let res = init(&mut deps, init_env.clone(), info, init_msg).unwrap();
+        assert_eq!(0, res.messages.len());
+        // create two clawbacks
+        for idc in ["foo", "bar", "wrong-per", "wrong-back"].iter() {
+            let create = CreateMsg {
+                id: idc.to_string(),
+                backup: if *idc == "wrong-back" {
+                    HumanAddr::from("backup2")
+                } else {
+                    HumanAddr::from("backup")
+                },
+                holder: HumanAddr::from(*idc),
+                clawback_period: if *idc == "wrong-per" {
+                    mock_clawback_period - 1
+                } else {
+                    mock_clawback_period
+                },
+                cw20_whitelist: Some(vec![HumanAddr::from("other-token")]),
+            };
+            let receive = Cw20ReceiveMsg {
+                sender: HumanAddr::from("source"),
+                amount: Uint128(100),
+                msg: Some(to_binary(&HandleMsg::Create(create.clone())).unwrap()),
+            };
+
+            let info = mock_info(&token_contract, &vec![]);
+            let msg = HandleMsg::Receive(receive.clone());
+
+            let res = handle(&mut deps, init_env.clone(), info, msg).unwrap();
+            assert_eq!(0, res.messages.len());
+            assert_eq!(attr("action", "create"), res.attributes[0]);
+
+            // ensure the details is what we expect
+            let details = query_details(&deps, idc.to_string()).unwrap();
+            assert_eq!(
+                details,
+                DetailsResponse {
+                    id: idc.to_string(),
+                    backup: if *idc == "wrong-back" {
+                        HumanAddr::from("backup2")
+                    } else {
+                        HumanAddr::from("backup")
+                    },
+                    holder: HumanAddr::from(*idc),
+                    clawback_period: if *idc == "wrong-per" {
+                        mock_clawback_period - 1
+                    } else {
+                        mock_clawback_period
+                    },
+                    end_time: if *idc == "wrong-per" {
+                        mock_time + mock_clawback_period - 1
+                    } else {
+                        mock_time + mock_clawback_period
+                    },
+                    native_balance: vec![],
+                    cw20_balance: vec![Cw20CoinHuman {
+                        address: HumanAddr::from("my-cw20-token"),
+                        amount: Uint128(100),
+                    }],
+                    cw20_whitelist: vec![
+                        HumanAddr::from("other-token"),
+                        HumanAddr::from("my-cw20-token")
+                    ],
+                }
+            );
+        }
+
+        // transfer it
+        let from_id = "foo".to_string();
+        let to_id = "bar".to_string();
+        let info = mock_info(HumanAddr::from(from_id.clone()), &[]);
+        let mut new_env = mock_env();
+        new_env.block.time = mock_time + 1;
+        let token_address = deps
+            .api
+            .canonical_address(&HumanAddr::from("my-cw20-token"))
+            .unwrap();
+        let res = handle(
+            &mut deps,
+            new_env.clone(),
+            info,
+            HandleMsg::ClawbackTransfer {
+                from_id,
+                to_id,
+                amount: Balance::Cw20(Cw20Coin {
+                    address: token_address.clone(),
+                    amount: Uint128(1),
+                }),
+            },
+        )
+        .unwrap();
+        assert_eq!(0, res.messages.len());
+        assert_eq!(attr("action", "transfer"), res.attributes[0]);
+
+        // ensure the details is what we expect
+        let details = query_details(&deps, "foo".to_string()).unwrap();
+        assert_eq!(
+            details,
+            DetailsResponse {
+                id: "foo".to_string(),
+                backup: HumanAddr::from("backup"),
+                holder: HumanAddr::from("foo"),
+                clawback_period: mock_clawback_period,
+                end_time: mock_time + mock_clawback_period,
+                native_balance: vec![],
+                cw20_balance: vec![Cw20CoinHuman {
+                    address: HumanAddr::from("my-cw20-token"),
+                    amount: Uint128(99),
+                }],
+                cw20_whitelist: vec![
+                    HumanAddr::from("other-token"),
+                    HumanAddr::from("my-cw20-token")
+                ],
+            }
+        );
+
+        let details = query_details(&deps, "bar".to_string()).unwrap();
+        assert_eq!(
+            details,
+            DetailsResponse {
+                id: "bar".to_string(),
+                backup: HumanAddr::from("backup"),
+                holder: HumanAddr::from("bar"),
+                clawback_period: mock_clawback_period,
+                end_time: mock_time + 1 + mock_clawback_period,
+                native_balance: vec![],
+                cw20_balance: vec![Cw20CoinHuman {
+                    address: HumanAddr::from("my-cw20-token"),
+                    amount: Uint128(101),
+                }],
+                cw20_whitelist: vec![
+                    HumanAddr::from("other-token"),
+                    HumanAddr::from("my-cw20-token")
+                ],
+            }
+        );
+
+        // claw back
+        let from_id = "bar".to_string();
+        let to_id = "foo".to_string();
+        let info = mock_info(HumanAddr::from("backup"), &[]);
+        let res = handle(
+            &mut deps,
+            new_env.clone(),
+            info,
+            HandleMsg::ClawbackTransfer {
+                from_id,
+                to_id,
+                amount: Balance::Cw20(Cw20Coin {
+                    address: token_address.clone(),
+                    amount: Uint128(1),
+                }),
+            },
+        )
+        .unwrap();
+        assert_eq!(0, res.messages.len());
+        assert_eq!(attr("action", "transfer"), res.attributes[0]);
+
+        // ensure the details is what we expect
+        let details = query_details(&deps, "foo".to_string()).unwrap();
+        assert_eq!(
+            details,
+            DetailsResponse {
+                id: "foo".to_string(),
+                backup: HumanAddr::from("backup"),
+                holder: HumanAddr::from("foo"),
+                clawback_period: mock_clawback_period,
+                end_time: mock_time + 1 + mock_clawback_period,
+                native_balance: vec![],
+                cw20_balance: vec![Cw20CoinHuman {
+                    address: HumanAddr::from("my-cw20-token"),
+                    amount: Uint128(100),
+                }],
+                cw20_whitelist: vec![
+                    HumanAddr::from("other-token"),
+                    HumanAddr::from("my-cw20-token")
+                ]
+            }
+        );
+
+        let details = query_details(&deps, "bar".to_string()).unwrap();
+        assert_eq!(
+            details,
+            DetailsResponse {
+                id: "bar".to_string(),
+                backup: HumanAddr::from("backup"),
+                holder: HumanAddr::from("bar"),
+                clawback_period: mock_clawback_period,
+                end_time: mock_time + 1 + mock_clawback_period,
+                native_balance: vec![],
+                cw20_balance: vec![Cw20CoinHuman {
+                    address: HumanAddr::from("my-cw20-token"),
+                    amount: Uint128(100),
+                }],
+                cw20_whitelist: vec![
+                    HumanAddr::from("other-token"),
+                    HumanAddr::from("my-cw20-token")
+                ]
+            }
+        );
+
+        // failures
+        let from_id = "foo".to_string();
+        let to_id = "wrong-per".to_string();
+        let info = mock_info(HumanAddr::from(from_id.clone()), &[]);
+        let res = handle(
+            &mut deps,
+            new_env.clone(),
+            info,
+            HandleMsg::ClawbackTransfer {
+                from_id,
+                to_id,
+                amount: Balance::Cw20(Cw20Coin {
+                    address: token_address.clone(),
+                    amount: Uint128(1),
+                }),
+            },
+        );
+
+        match res.unwrap_err() {
+            ContractError::ContractMismatch {} => {}
+            e => panic!("Expected ContractMismatch, got {}", e),
+        }
+
+        let from_id = "foo".to_string();
+        let to_id = "wrong-back".to_string();
+        let info = mock_info(HumanAddr::from(from_id.clone()), &[]);
+        let res = handle(
+            &mut deps,
+            new_env.clone(),
+            info,
+            HandleMsg::ClawbackTransfer {
+                from_id,
+                to_id,
+                amount: Balance::Cw20(Cw20Coin {
+                    address: token_address.clone(),
+                    amount: Uint128(1),
+                }),
+            },
+        );
+
+        match res.unwrap_err() {
+            ContractError::ContractMismatch {} => {}
+            e => panic!("Expected ContractMismatch, got {}", e),
+        }
+    }
+
+    #[test]
     fn transfer_native() {
         let mut deps = mock_dependencies(&[]);
 
@@ -848,11 +1108,6 @@ mod tests {
             ContractError::ContractMismatch {} => {}
             e => panic!("Expected ContractMismatch, got {}", e),
         }
-    }
-
-    #[test]
-    fn transfer_cw20() {
-        todo!();
     }
 
     #[test]
