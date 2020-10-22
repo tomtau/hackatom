@@ -341,14 +341,23 @@ fn query_list<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResu
 #[cfg(test)]
 mod tests {
     use crate::msg::HandleMsg::TopUp;
-    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info, MOCK_CONTRACT_ADDR};
-    use cosmwasm_std::{coin, coins, CanonicalAddr, CosmosMsg, StdError, Uint128};
+    use cosmwasm_std::testing::{
+        mock_dependencies, mock_env, mock_info, MockApi, MockQuerier, MOCK_CONTRACT_ADDR,
+    };
+    use cosmwasm_std::{
+        coin, coins, CanonicalAddr, Coin, CosmosMsg, MemoryStorage, StdError, Uint128,
+    };
     use cw0::NativeBalance;
 
     use super::*;
 
-    #[test]
-    fn happy_path_native() {
+    fn basic_native_setup() -> (
+        CreateMsg,
+        u64,
+        u64,
+        Extern<MemoryStorage, MockApi, MockQuerier>,
+        Vec<Coin>,
+    ) {
         let mut deps = mock_dependencies(&[]);
 
         // init an empty contract
@@ -393,6 +402,12 @@ mod tests {
                 cw20_whitelist: vec![],
             }
         );
+        (create, mock_time, mock_clawback_period, deps, balance)
+    }
+
+    #[test]
+    fn happy_path_native() {
+        let (create, mock_time, mock_clawback_period, mut deps, balance) = basic_native_setup();
 
         // withdraw it
         let id = create.id.clone();
@@ -842,7 +857,36 @@ mod tests {
 
     #[test]
     fn refresh() {
-        todo!();
+        let (create, mock_time, mock_clawback_period, mut deps, balance) = basic_native_setup();
+
+        // refresh it
+        let id = create.id.clone();
+        let info = mock_info(&create.holder, &[]);
+        let mut new_env = mock_env();
+        new_env.block.time = mock_time + mock_clawback_period;
+        let res = handle(
+            &mut deps,
+            new_env.clone(),
+            info,
+            HandleMsg::Refresh { id: id.clone() },
+        )
+        .unwrap();
+        assert_eq!(0, res.messages.len());
+        assert_eq!(attr("action", "refresh"), res.attributes[0]);
+        let details = query_details(&deps, id.clone()).unwrap();
+        assert_eq!(
+            details,
+            DetailsResponse {
+                id,
+                backup: HumanAddr::from("backup"),
+                holder: HumanAddr::from("holder"),
+                clawback_period: mock_clawback_period,
+                end_time: mock_time + 2 * mock_clawback_period,
+                native_balance: balance.clone(),
+                cw20_balance: vec![],
+                cw20_whitelist: vec![],
+            }
+        );
     }
 
     #[test]
