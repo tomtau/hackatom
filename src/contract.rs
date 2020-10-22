@@ -468,7 +468,7 @@ mod tests {
         let msg = HandleMsg::Receive(receive.clone());
         let res = handle(&mut deps, init_env, info, msg).unwrap();
         assert_eq!(0, res.messages.len());
-        assert_eq!(attr("action", "withdraw"), res.attributes[0]);
+        assert_eq!(attr("action", "create"), res.attributes[0]);
         // ensure the whitelist is what we expect
         let details = query_details(&deps, "foobar".to_string()).unwrap();
 
@@ -891,7 +891,26 @@ mod tests {
 
     #[test]
     fn burn() {
-        todo!();
+        let (create, mock_time, _, mut deps, _) = basic_native_setup();
+
+        // burn it
+        let id = create.id.clone();
+        let info = mock_info(&create.backup, &[]);
+        let mut new_env = mock_env();
+        new_env.block.time = mock_time;
+        let res = handle(&mut deps, new_env.clone(), info, HandleMsg::Burn { id }).unwrap();
+        // FIXME: for native tokens, some bank/supply message back to burn in Cosmos SDK?
+        assert_eq!(0, res.messages.len());
+        assert_eq!(attr("action", "burn"), res.attributes[0]);
+
+        // second attempt fails (not found)
+        let id = create.id.clone();
+        let info = mock_info(&create.backup, &[]);
+        let res = handle(&mut deps, new_env, info, HandleMsg::Burn { id });
+        match res.unwrap_err() {
+            ContractError::Std(StdError::NotFound { .. }) => {}
+            e => panic!("Expected NotFound, got {}", e),
+        }
     }
 
     #[test]
