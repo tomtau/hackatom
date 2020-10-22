@@ -100,10 +100,10 @@
       "description": "Transfer is only allowed between the clawbacks with the same \"backup\", \"clawback_period\" and \"cw20_whitelist\"",
       "type": "object",
       "required": [
-        "clawback_native_transfer"
+        "clawback_transfer"
       ],
       "properties": {
-        "clawback_native_transfer": {
+        "clawback_transfer": {
           "type": "object",
           "required": [
             "amount",
@@ -112,45 +112,10 @@
           ],
           "properties": {
             "amount": {
-              "description": "the amount of the native token to transfer",
+              "description": "the amount of the token(s) to transfer",
               "allOf": [
                 {
-                  "$ref": "#/definitions/Coin"
-                }
-              ]
-            },
-            "from_id": {
-              "description": "id is a human-readable name for the clawback from create",
-              "type": "string"
-            },
-            "to_id": {
-              "description": "id is a human-readable name for the clawback from create",
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    {
-      "description": "Transfer is only allowed between the clawbacks with the same \"backup\", \"clawback_period\" and \"cw20_whitelist\"",
-      "type": "object",
-      "required": [
-        "clawback_cw20_transfer"
-      ],
-      "properties": {
-        "clawback_cw20_transfer": {
-          "type": "object",
-          "required": [
-            "amount",
-            "from_id",
-            "to_id"
-          ],
-          "properties": {
-            "amount": {
-              "description": "the amount of the CW20 token to transfer",
-              "allOf": [
-                {
-                  "$ref": "#/definitions/Cw20CoinHuman"
+                  "$ref": "#/definitions/Balance"
                 }
               ]
             },
@@ -180,9 +145,38 @@
     }
   ],
   "definitions": {
+    "Balance": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "native"
+          ],
+          "properties": {
+            "native": {
+              "$ref": "#/definitions/NativeBalance"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cw20"
+          ],
+          "properties": {
+            "cw20": {
+              "$ref": "#/definitions/Cw20Coin"
+            }
+          }
+        }
+      ]
+    },
     "Binary": {
       "description": "Binary is a wrapper around Vec<u8> to add base64 de/serialization with serde. It also adds some helper methods to help encode inline.\n\nThis is only needed as serde-json-{core,wasm} has a horrible encoding for Vec<u8>",
       "type": "string"
+    },
+    "CanonicalAddr": {
+      "$ref": "#/definitions/Binary"
     },
     "Coin": {
       "type": "object",
@@ -246,7 +240,7 @@
         }
       }
     },
-    "Cw20CoinHuman": {
+    "Cw20Coin": {
       "type": "object",
       "required": [
         "address",
@@ -254,7 +248,7 @@
       ],
       "properties": {
         "address": {
-          "$ref": "#/definitions/HumanAddr"
+          "$ref": "#/definitions/CanonicalAddr"
         },
         "amount": {
           "$ref": "#/definitions/Uint128"
@@ -289,6 +283,12 @@
     },
     "HumanAddr": {
       "type": "string"
+    },
+    "NativeBalance": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Coin"
+      }
     },
     "Uint128": {
       "type": "string"

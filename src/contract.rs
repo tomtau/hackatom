@@ -1,6 +1,6 @@
 use cosmwasm_std::{
-    attr, from_binary, to_binary, Api, BankMsg, Binary, Coin, CosmosMsg, Env, Extern,
-    HandleResponse, HumanAddr, InitResponse, MessageInfo, Querier, StdResult, Storage, WasmMsg,
+    attr, from_binary, to_binary, Api, BankMsg, Binary, CosmosMsg, Env, Extern, HandleResponse,
+    HumanAddr, InitResponse, MessageInfo, Querier, StdResult, Storage, WasmMsg,
 };
 
 use cw2::set_contract_version;
@@ -42,16 +42,11 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
         HandleMsg::Withdraw { id } => try_withdraw(deps, env, info, id),
         HandleMsg::Refresh { id } => try_refresh(deps, env, info, id),
         HandleMsg::Burn { id } => try_burn(deps, env, info, id),
-        HandleMsg::ClawbackNativeTransfer {
+        HandleMsg::ClawbackTransfer {
             from_id,
             to_id,
             amount,
-        } => try_transfer_native(deps, env, info, from_id, to_id, amount),
-        HandleMsg::ClawbackCw20Transfer {
-            from_id,
-            to_id,
-            amount,
-        } => try_transfer_cw20(deps, env, info, from_id, to_id, amount),
+        } => try_transfer(deps, env, info, from_id, to_id, amount),
     }
 }
 
@@ -82,24 +77,13 @@ pub fn try_burn<S: Storage, A: Api, Q: Querier>(
     todo!()
 }
 
-pub fn try_transfer_native<S: Storage, A: Api, Q: Querier>(
+pub fn try_transfer<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
     info: MessageInfo,
     from_id: String,
     to_id: String,
-    amount: Coin,
-) -> Result<HandleResponse, ContractError> {
-    todo!()
-}
-
-pub fn try_transfer_cw20<S: Storage, A: Api, Q: Querier>(
-    deps: &mut Extern<S, A, Q>,
-    env: Env,
-    info: MessageInfo,
-    from_id: String,
-    to_id: String,
-    amount: Cw20CoinHuman,
+    amount: Balance,
 ) -> Result<HandleResponse, ContractError> {
     todo!()
 }

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use cosmwasm_std::{Api, CanonicalAddr, Coin, HumanAddr, StdResult};
 
-use cw20::{Cw20CoinHuman, Cw20ReceiveMsg};
+use cw20::{Balance, Cw20CoinHuman, Cw20ReceiveMsg};
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct InitMsg {}
@@ -33,23 +33,13 @@ pub enum HandleMsg {
     },
     /// Transfer is only allowed between the clawbacks with the same
     /// "backup", "clawback_period" and "cw20_whitelist"
-    ClawbackNativeTransfer {
+    ClawbackTransfer {
         /// id is a human-readable name for the clawback from create
         from_id: String,
         /// id is a human-readable name for the clawback from create
         to_id: String,
-        /// the amount of the native token to transfer
-        amount: Coin,
-    },
-    /// Transfer is only allowed between the clawbacks with the same
-    /// "backup", "clawback_period" and "cw20_whitelist"
-    ClawbackCw20Transfer {
-        /// id is a human-readable name for the clawback from create
-        from_id: String,
-        /// id is a human-readable name for the clawback from create
-        to_id: String,
-        /// the amount of the CW20 token to transfer
-        amount: Cw20CoinHuman,
+        /// the amount of the token(s) to transfer
+        amount: Balance,
     },
     /// This accepts a properly-encoded ReceiveMsg from a cw20 contract
     Receive(Cw20ReceiveMsg),
