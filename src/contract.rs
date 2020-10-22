@@ -349,72 +349,73 @@ mod tests {
 
     #[test]
     fn happy_path_native() {
-        todo!();
-        // let mut deps = mock_dependencies(&[]);
+        let mut deps = mock_dependencies(&[]);
 
-        // // init an empty contract
-        // let init_msg = InitMsg {};
-        // let info = mock_info(&HumanAddr::from("anyone"), &[]);
-        // let res = init(&mut deps, mock_env(), info, init_msg).unwrap();
-        // assert_eq!(0, res.messages.len());
+        // init an empty contract
+        let init_msg = InitMsg {};
+        let info = mock_info(&HumanAddr::from("anyone"), &[]);
+        let res = init(&mut deps, mock_env(), info, init_msg).unwrap();
+        assert_eq!(0, res.messages.len());
 
-        // // create an escrow
-        // let create = CreateMsg {
-        //     id: "foobar".to_string(),
-        //     arbiter: HumanAddr::from("arbitrate"),
-        //     recipient: HumanAddr::from("recd"),
-        //     end_time: None,
-        //     end_height: Some(123456),
-        //     cw20_whitelist: None,
-        // };
-        // let sender = HumanAddr::from("source");
-        // let balance = coins(100, "tokens");
-        // let info = mock_info(&sender, &balance);
-        // let msg = HandleMsg::Create(create.clone());
-        // let res = handle(&mut deps, mock_env(), info, msg).unwrap();
-        // assert_eq!(0, res.messages.len());
-        // assert_eq!(attr("action", "create"), res.attributes[0]);
+        // create a clawback
+        let create = CreateMsg {
+            id: "foobar".to_string(),
+            backup: HumanAddr::from("backup"),
+            holder: HumanAddr::from("holder"),
+            clawback_period: 1,
+            cw20_whitelist: None,
+        };
+        let sender = HumanAddr::from("source");
+        let balance = coins(100, "tokens");
+        let info = mock_info(&sender, &balance);
+        let msg = HandleMsg::Create(create.clone());
+        let res = handle(&mut deps, mock_env(), info, msg).unwrap();
+        assert_eq!(0, res.messages.len());
+        assert_eq!(attr("action", "create"), res.attributes[0]);
 
-        // // ensure the details is what we expect
-        // let details = query_details(&deps, "foobar".to_string()).unwrap();
-        // assert_eq!(
-        //     details,
-        //     DetailsResponse {
-        //         id: "foobar".to_string(),
-        //         arbiter: HumanAddr::from("arbitrate"),
-        //         recipient: HumanAddr::from("recd"),
-        //         source: HumanAddr::from("source"),
-        //         end_height: Some(123456),
-        //         end_time: None,
-        //         native_balance: balance.clone(),
-        //         cw20_balance: vec![],
-        //         cw20_whitelist: vec![],
-        //     }
-        // );
+        // ensure the details is what we expect
+        let details = query_details(&deps, "foobar".to_string()).unwrap();
+        let mock_time = 1571920875;
+        let mock_clawback_period = 1;
+        assert_eq!(
+            details,
+            DetailsResponse {
+                id: "foobar".to_string(),
+                backup: HumanAddr::from("backup"),
+                holder: HumanAddr::from("holder"),
+                clawback_period: mock_clawback_period,
+                end_time: mock_time,
+                native_balance: balance.clone(),
+                cw20_balance: vec![],
+                cw20_whitelist: vec![],
+            }
+        );
 
-        // // approve it
-        // let id = create.id.clone();
-        // let info = mock_info(&create.arbiter, &[]);
-        // let res = handle(&mut deps, mock_env(), info, HandleMsg::Approve { id }).unwrap();
-        // assert_eq!(1, res.messages.len());
-        // assert_eq!(attr("action", "approve"), res.attributes[0]);
-        // assert_eq!(
-        //     res.messages[0],
-        //     CosmosMsg::Bank(BankMsg::Send {
-        //         from_address: HumanAddr::from(MOCK_CONTRACT_ADDR),
-        //         to_address: create.recipient,
-        //         amount: balance,
-        //     })
-        // );
+        // withdraw it
+        let id = create.id.clone();
+        let info = mock_info(&create.holder, &[]);
+        let mut new_env = mock_env();
+        new_env.block.time = mock_time + mock_clawback_period;
+        let res = handle(&mut deps, new_env.clone(), info, HandleMsg::Withdraw { id }).unwrap();
+        assert_eq!(1, res.messages.len());
+        assert_eq!(attr("action", "approve"), res.attributes[0]);
+        assert_eq!(
+            res.messages[0],
+            CosmosMsg::Bank(BankMsg::Send {
+                from_address: HumanAddr::from(MOCK_CONTRACT_ADDR),
+                to_address: create.holder.clone(),
+                amount: balance,
+            })
+        );
 
-        // // second attempt fails (not found)
-        // let id = create.id.clone();
-        // let info = mock_info(&create.arbiter, &[]);
-        // let res = handle(&mut deps, mock_env(), info, HandleMsg::Approve { id });
-        // match res.unwrap_err() {
-        //     ContractError::Std(StdError::NotFound { .. }) => {}
-        //     e => panic!("Expected NotFound, got {}", e),
-        // }
+        // second attempt fails (not found)
+        let id = create.id.clone();
+        let info = mock_info(&create.holder, &[]);
+        let res = handle(&mut deps, new_env, info, HandleMsg::Withdraw { id });
+        match res.unwrap_err() {
+            ContractError::Std(StdError::NotFound { .. }) => {}
+            e => panic!("Expected NotFound, got {}", e),
+        }
     }
 
     #[test]
