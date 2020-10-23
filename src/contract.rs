@@ -34,9 +34,7 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     msg: HandleMsg,
 ) -> Result<HandleResponse, ContractError> {
     match msg {
-        HandleMsg::Create(msg) => {
-            try_create(deps, env, msg, Balance::from(info.sent_funds), &info.sender)
-        }
+        HandleMsg::Create(msg) => try_create(deps, env, msg, Balance::from(info.sent_funds)),
         HandleMsg::TopUp { id } => try_top_up(deps, id, Balance::from(info.sent_funds)),
         HandleMsg::Receive(msg) => try_receive(deps, env, info, msg),
         HandleMsg::Withdraw { id } => try_withdraw(deps, env, info, id),
@@ -154,7 +152,7 @@ pub fn try_receive<S: Storage, A: Api, Q: Querier>(
         amount: wrapper.amount,
     });
     match msg {
-        ReceiveMsg::Create(msg) => try_create(deps, env, msg, balance, &wrapper.sender),
+        ReceiveMsg::Create(msg) => try_create(deps, env, msg, balance),
         ReceiveMsg::TopUp { id } => try_top_up(deps, id, balance),
     }
 }
@@ -164,7 +162,6 @@ pub fn try_create<S: Storage, A: Api, Q: Querier>(
     env: Env,
     msg: CreateMsg,
     balance: Balance,
-    sender: &HumanAddr,
 ) -> Result<HandleResponse, ContractError> {
     if balance.is_empty() {
         return Err(ContractError::EmptyBalance {});
