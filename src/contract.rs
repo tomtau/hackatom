@@ -111,7 +111,21 @@ pub fn try_burn<S: Storage, A: Api, Q: Querier>(
     info: MessageInfo,
     id: String,
 ) -> Result<HandleResponse, ContractError> {
-    todo!()
+    // this fails is no clawback there
+    let clawback = clawbacks_read(&deps.storage).load(id.as_bytes())?;
+    let sender = deps.api.canonical_address(&info.sender)?;
+
+    if clawback.is_expired(&env) || sender != clawback.backup {
+        Err(ContractError::Unauthorized {})
+    } else {
+        // we delete the clawback
+        clawbacks(&mut deps.storage).remove(id.as_bytes());
+
+        // FIXME: some bank/supply burn messages to be returned?
+        let mut res = HandleResponse::default();
+        res.attributes = vec![attr("action", "burn"), attr("id", id)];
+        Ok(res)
+    }
 }
 
 pub fn try_transfer<S: Storage, A: Api, Q: Querier>(
