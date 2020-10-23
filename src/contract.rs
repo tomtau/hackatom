@@ -87,7 +87,22 @@ pub fn try_refresh<S: Storage, A: Api, Q: Querier>(
     info: MessageInfo,
     id: String,
 ) -> Result<HandleResponse, ContractError> {
-    todo!()
+    // this fails is no clawback there
+    let mut clawback = clawbacks_read(&deps.storage).load(id.as_bytes())?;
+    let sender = deps.api.canonical_address(&info.sender)?;
+
+    if sender != clawback.holder && !(!clawback.is_expired(&env) && sender == clawback.backup) {
+        Err(ContractError::Unauthorized {})
+    } else {
+        clawback.end_time = env.block.time + clawback.clawback_period;
+        // try to store it, fail if the id was already in use
+        clawbacks(&mut deps.storage)
+            .update::<_, ContractError>(id.as_bytes(), |_existing| Ok(clawback))?;
+
+        let mut res = HandleResponse::default();
+        res.attributes = vec![attr("action", "refresh"), attr("id", id)];
+        Ok(res)
+    }
 }
 
 pub fn try_burn<S: Storage, A: Api, Q: Querier>(
@@ -207,36 +222,6 @@ pub fn try_top_up<S: Storage, A: Api, Q: Querier>(
     res.attributes = vec![attr("action", "top_up"), attr("id", id)];
     Ok(res)
 }
-
-// pub fn try_refund<S: Storage, A: Api, Q: Querier>(
-//     deps: &mut Extern<S, A, Q>,
-//     env: Env,
-//     info: MessageInfo,
-//     id: String,
-// ) -> Result<HandleResponse, ContractError> {
-//     // this fails is no escrow there
-//     let escrow = escrows_read(&deps.storage).load(id.as_bytes())?;
-
-//     // the arbiter can send anytime OR anyone can send after expiration
-//     if !escrow.is_expired(&env) && deps.api.canonical_address(&info.sender)? != escrow.arbiter {
-//         Err(ContractError::Unauthorized {})
-//     } else {
-//         // we delete the escrow
-//         escrows(&mut deps.storage).remove(id.as_bytes());
-
-//         let rcpt = deps.api.human_address(&escrow.source)?;
-
-//         // send all tokens out
-//         let messages = send_tokens(&deps.api, &env.contract.address, &rcpt, &escrow.balance)?;
-
-//         let attributes = vec![attr("action", "refund"), attr("id", id), attr("to", rcpt)];
-//         Ok(HandleResponse {
-//             messages,
-//             attributes,
-//             data: None,
-//         })
-//     }
-// }
 
 fn send_tokens<A: Api>(
     api: &A,
