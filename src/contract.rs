@@ -56,7 +56,29 @@ pub fn try_withdraw<S: Storage, A: Api, Q: Querier>(
     info: MessageInfo,
     id: String,
 ) -> Result<HandleResponse, ContractError> {
-    todo!()
+    // this fails is no clawback there
+    let clawback = clawbacks_read(&deps.storage).load(id.as_bytes())?;
+
+    if deps.api.canonical_address(&info.sender)? != clawback.holder {
+        Err(ContractError::Unauthorized {})
+    } else if !clawback.is_expired(&env) {
+        Err(ContractError::NotExpired {})
+    } else {
+        // we delete the clawback
+        clawbacks(&mut deps.storage).remove(id.as_bytes());
+
+        let rcpt = deps.api.human_address(&clawback.holder)?;
+
+        // send all tokens out
+        let messages = send_tokens(&deps.api, &env.contract.address, &rcpt, &clawback.balance)?;
+
+        let attributes = vec![attr("action", "withdraw"), attr("id", id), attr("to", rcpt)];
+        Ok(HandleResponse {
+            messages,
+            attributes,
+            data: None,
+        })
+    }
 }
 
 pub fn try_refresh<S: Storage, A: Api, Q: Querier>(
@@ -185,37 +207,6 @@ pub fn try_top_up<S: Storage, A: Api, Q: Querier>(
     res.attributes = vec![attr("action", "top_up"), attr("id", id)];
     Ok(res)
 }
-
-// pub fn try_approve<S: Storage, A: Api, Q: Querier>(
-//     deps: &mut Extern<S, A, Q>,
-//     env: Env,
-//     info: MessageInfo,
-//     id: String,
-// ) -> Result<HandleResponse, ContractError> {
-//     // this fails is no escrow there
-//     let escrow = escrows_read(&deps.storage).load(id.as_bytes())?;
-
-//     if deps.api.canonical_address(&info.sender)? != escrow.arbiter {
-//         Err(ContractError::Unauthorized {})
-//     } else if escrow.is_expired(&env) {
-//         Err(ContractError::Expired {})
-//     } else {
-//         // we delete the escrow
-//         escrows(&mut deps.storage).remove(id.as_bytes());
-
-//         let rcpt = deps.api.human_address(&escrow.recipient)?;
-
-//         // send all tokens out
-//         let messages = send_tokens(&deps.api, &env.contract.address, &rcpt, &escrow.balance)?;
-
-//         let attributes = vec![attr("action", "approve"), attr("id", id), attr("to", rcpt)];
-//         Ok(HandleResponse {
-//             messages,
-//             attributes,
-//             data: None,
-//         })
-//     }
-// }
 
 // pub fn try_refund<S: Storage, A: Api, Q: Querier>(
 //     deps: &mut Extern<S, A, Q>,
@@ -413,7 +404,7 @@ mod tests {
         let id = create.id.clone();
         let info = mock_info(&create.holder, &[]);
         let mut new_env = mock_env();
-        new_env.block.time = mock_time + mock_clawback_period;
+        new_env.block.time = mock_time + mock_clawback_period + 1;
         let res = handle(&mut deps, new_env.clone(), info, HandleMsg::Withdraw { id }).unwrap();
         assert_eq!(1, res.messages.len());
         assert_eq!(attr("action", "withdraw"), res.attributes[0]);
@@ -496,7 +487,7 @@ mod tests {
         let id = create.id.clone();
         let info = mock_info(&create.holder, &[]);
         let mut new_env = mock_env();
-        new_env.block.time = mock_time + mock_clawback_period;
+        new_env.block.time = mock_time + mock_clawback_period + 1;
         let res = handle(&mut deps, new_env.clone(), info, HandleMsg::Withdraw { id }).unwrap();
         assert_eq!(1, res.messages.len());
         assert_eq!(attr("action", "withdraw"), res.attributes[0]);
@@ -1261,7 +1252,7 @@ mod tests {
 
         // withdraw it
         let mut new_env = mock_env();
-        new_env.block.time = mock_time + mock_clawback_period;
+        new_env.block.time = mock_time + mock_clawback_period + 1;
         let id = create.id.clone();
         let info = mock_info(&create.holder, &[]);
         let res = handle(&mut deps, new_env.clone(), info, HandleMsg::Withdraw { id }).unwrap();
