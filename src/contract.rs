@@ -93,9 +93,8 @@ pub fn try_refresh<S: Storage, A: Api, Q: Querier>(
         Err(ContractError::Unauthorized {})
     } else {
         clawback.end_time = env.block.time + clawback.clawback_period;
-        // try to store it, fail if the id was already in use
-        clawbacks(&mut deps.storage)
-            .update::<_, ContractError>(id.as_bytes(), |_existing| Ok(clawback))?;
+        // try to store it
+        clawbacks(&mut deps.storage).save(id.as_bytes(), &clawback)?;
 
         let mut res = HandleResponse::default();
         res.attributes = vec![attr("action", "refresh"), attr("id", id)];
@@ -134,7 +133,46 @@ pub fn try_transfer<S: Storage, A: Api, Q: Querier>(
     to_id: String,
     amount: Balance,
 ) -> Result<HandleResponse, ContractError> {
-    todo!()
+    if amount.is_empty() {
+        return Err(ContractError::EmptyBalance {});
+    }
+    let mut clawback_from = clawbacks_read(&deps.storage).load(from_id.as_bytes())?;
+    let mut clawback_to = clawbacks_read(&deps.storage).load(to_id.as_bytes())?;
+    if clawback_from.backup != clawback_to.backup
+        || clawback_from.clawback_period > clawback_to.clawback_period
+    {
+        Err(ContractError::ContractMismatch {})
+    } else {
+        let sender = deps.api.canonical_address(&info.sender)?;
+        if !(!clawback_from.is_expired(&env) && sender == clawback_from.backup)
+            && sender != clawback_from.holder
+        {
+            return Err(ContractError::Unauthorized {});
+        }
+
+        for address in clawback_from.cw20_whitelist.iter() {
+            if !clawback_to.cw20_whitelist.iter().any(|t| t == address) {
+                return Err(ContractError::NotInWhitelist {});
+            }
+        }
+        clawback_from
+            .balance
+            .remove_tokens(amount.clone())
+            .map_err(|_| ContractError::NotEnoughBalance {})?;
+        clawback_to.balance.add_tokens(amount);
+        clawback_to.end_time = env.block.time + clawback_to.clawback_period;
+        // try to store it
+        let mut bucket = clawbacks(&mut deps.storage);
+        bucket.save(from_id.as_bytes(), &clawback_from)?;
+        bucket.save(to_id.as_bytes(), &clawback_to)?;
+        let mut res = HandleResponse::default();
+        res.attributes = vec![
+            attr("action", "transfer"),
+            attr("from_id", from_id),
+            attr("to_id", to_id),
+        ];
+        Ok(res)
+    }
 }
 
 pub fn try_receive<S: Storage, A: Api, Q: Querier>(
