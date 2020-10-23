@@ -16,7 +16,59 @@ pub struct GenericBalance {
 
 impl GenericBalance {
     pub fn remove_tokens(&mut self, remove: Balance) -> Result<(), ()> {
-        Err(())
+        match remove {
+            Balance::Native(balance) => {
+                let mut indexed_amount = Vec::with_capacity(balance.0.len());
+                // check balances
+                for token in balance.0 {
+                    let index = self
+                        .native
+                        .iter()
+                        .enumerate()
+                        .find_map(|(i, exist)| {
+                            if exist.denom == token.denom {
+                                Some(i)
+                            } else {
+                                None
+                            }
+                        })
+                        .ok_or(())?;
+                    if token.amount > self.native[index].amount {
+                        return Err(());
+                    } else {
+                        let new_amount =
+                            (self.native[index].amount - token.amount).map_err(|_| ())?;
+                        indexed_amount.push((index, new_amount));
+                    }
+                }
+                // update balances
+                for (index, new_amount) in indexed_amount.iter() {
+                    self.native[*index].amount = *new_amount;
+                }
+                Ok(())
+            }
+            Balance::Cw20(token) => {
+                let index = self
+                    .cw20
+                    .iter()
+                    .enumerate()
+                    .find_map(|(i, exist)| {
+                        if exist.address == token.address {
+                            Some(i)
+                        } else {
+                            None
+                        }
+                    })
+                    .ok_or(())?;
+                if token.amount > self.cw20[index].amount {
+                    Err(())
+                } else {
+                    let new_amount = (self.cw20[index].amount - token.amount).map_err(|_| ())?;
+                    self.cw20[index].amount = new_amount;
+                    Ok(())
+                }
+            }
+        }
     }
 
     pub fn add_tokens(&mut self, add: Balance) {
