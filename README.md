@@ -9,6 +9,8 @@ There are at least two potential use cases of this logic:
 1. Exchange hot/cold wallet management protocols (similar to [Bitcoin Vaults](https://arxiv.org/abs/2005.11776) with covenants): the "backup" key here is used for retrieving back (or destroying if the "backup" key leaked too) stolen funds.
 2. Cashbacks: the "backup" key here roughly corresponds to the issuer / payment processor which serves merchants (that are paid in fiat) and gives cashbacks to customers -- if customer order are cancelled, modified or goods are returned, full or partial cashbacks are taken back.
 
+[*See this simplified explanation in Google Slides*](https://docs.google.com/presentation/d/13aEcVFhjQFKo9bGjHe0V9HiHnqbM7eGSHbDB27Psa24/edit?usp=sharing).
+
 ## Running this contract
 
 You will need Rust 1.44.1+ with `wasm32-unknown-unknown` target installed.
